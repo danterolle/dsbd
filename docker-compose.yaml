@@ -1,13 +1,14 @@
-version: '3.8'
 services:
   user-manager:
     build: ./microservices/user_manager
     ports:
       - "5001:5000"
+      - "50051:50051"
     environment:
       - DATABASE_URL=postgresql://user_manager:password@user-db:5432/user_manager_db
     depends_on:
-      - user-db
+      user-db:
+        condition: service_healthy
   user-db:
     image: postgres:13
     ports:
@@ -18,6 +19,11 @@ services:
       - POSTGRES_DB=user_manager_db
     volumes:
       - user_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user_manager -d user_manager_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   data-collector:
     build: ./microservices/data_collector
     ports:
@@ -25,7 +31,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://data_collector:password@data-db:5432/data_collector_db
     depends_on:
-      - data-db
+      data-db:
+        condition: service_healthy
   data-db:
     image: postgres:13
     ports:
@@ -36,6 +43,11 @@ services:
       - POSTGRES_DB=data_collector_db
     volumes:
       - data_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U data_collector -d data_collector_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   user_db_data:

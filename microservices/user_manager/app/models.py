@@ -1,7 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey
-from datetime import datetime
+from sqlalchemy import String
 
 
 class Base(DeclarativeBase):
@@ -12,10 +11,6 @@ db = SQLAlchemy(model_class=Base)
 
 
 class User(db.Model):
-    """
-    Class that represents a user in the system.
-    """
-
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(120), primary_key=True)

@@ -2,7 +2,9 @@ syntax = "proto3";
 
 package service;
 
+// Servizio per la gestione degli utenti esposto da User Manager
 service UserService {
+  // Verifica se un utente esiste tramite email
   rpc CheckUserExists (UserRequest) returns (UserResponse);
 }
 
