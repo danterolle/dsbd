@@ -6,9 +6,11 @@ from typing import Optional, Any
 
 import requests
 import grpc
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, request, jsonify
 from sqlalchemy import func, tuple_
+from sqlalchemy.orm import InstrumentedAttribute
+
 from models import db, UserInterest, FlightData
 from dotenv import load_dotenv
 
@@ -341,7 +343,7 @@ def get_user_interests(email: str):
     interests: list[UserInterest] = (
         db.session.query(UserInterest).filter_by(user_email=email).all()
     )
-    airport_codes: list[str] = [interest.airport_code for interest in interests]
+    airport_codes: list[InstrumentedAttribute[str]] = [interest.airport_code for interest in interests]
     return jsonify({"email": email, "airport_codes": airport_codes}), 200
 
 
@@ -425,6 +427,7 @@ def get_last_flight(icao: str):
 class DataCollectorService(
     service_pb2_grpc.DataCollectorServiceServicer if service_pb2_grpc else object
 ):
+    @staticmethod
     def DeleteUserInterests(self, request, context):
         with app.app_context():
             try:
