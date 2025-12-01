@@ -24,6 +24,17 @@
 								"key": "Content-Type",
 								"value": "application/json",
 								"type": "text"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{$guid}}",
+								"type": "text"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "3f9d2e1b-8c4a-4d6f-b1e2-5a7f8c2d9e4",
+								"type": "text",
+								"disabled": true
 							}
 						],
 						"body": {
@@ -96,10 +107,31 @@
 					"name": "Delete",
 					"request": {
 						"method": "DELETE",
-						"header": [],
+						"header": [
+							{
+								"key": "Idempotency-Key",
+								"value": "{{$guid}}",
+								"type": "text"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "3f9d2e1b-8c4a-4d6f-b1e2-5a7f8c2d9e4",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
 						"url": {
-							"raw": "https://127.0.0.1:5001/users",
-							"protocol": "https",
+							"raw": "http://127.0.0.1:5001/users/mario.rosso@gmail.com",
+							"protocol": "http",
 							"host": [
 								"127",
 								"0",
@@ -108,7 +140,8 @@
 							],
 							"port": "5001",
 							"path": [
-								"users"
+								"users",
+								"mario.rosso@gmail.com"
 							]
 						}
 					},
