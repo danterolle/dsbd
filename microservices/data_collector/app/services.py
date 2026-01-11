@@ -29,6 +29,9 @@ from config import (
 import service_pb2
 import service_pb2_grpc
 
+from metrics import track_opensky_call, track_flights_fetched
+
+
 cached_token = None
 cached_expiry = 0
 
@@ -175,17 +178,34 @@ def fetch_and_store_flights(airport_code: str, app) -> None:
     url = f"{OPENSKY_API_URL}/flights/all"
     params = {"airport": airport_code, "begin": begin_time, "end": end_time}
 
+    start_time = time.time()
+    success = False
+
     try:
         flights = call_opensky(url, params=params)
+        duration = time.time() - start_time
+
         if flights:
             flight_count = len(flights)
             print(f"Found {flight_count} flights for {airport_code}.")
-            with app.app_context():
+
+            track_opensky_call(airport_code, duration, success=True)
+            track_flights_fetched(airport_code, flight_count)
+
+            if app:
+                with app.app_context():
+                    save_flight_data(flights)
+                    send_alert_to_kafka(airport_code, flight_count)
+            else:
                 save_flight_data(flights)
                 send_alert_to_kafka(airport_code, flight_count)
         else:
+            track_opensky_call(airport_code, duration, success=True)
+            track_flights_fetched(airport_code, 0)
             print(f"No flights found for {airport_code}.")
     except CircuitBreakerError:
+        duration = time.time() - start_time
+        track_opensky_call(airport_code, duration, success=False)
         print("Circuit breaker is open. Skipping OpenSky API call.")
 
 
