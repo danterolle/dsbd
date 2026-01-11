@@ -10,11 +10,17 @@ from sqlalchemy.exc import IntegrityError
 
 import services
 from models import db, User, IdempotencyKey
+from metrics import track_requests, metrics_endpoint
 
 main = Blueprint("main", __name__)
 
+# Prometheus metrics endpoint.
+@main.route("/metrics")
+def metrics():
+    return metrics_endpoint()
 
 @main.route("/ping")
+@track_requests
 def ping():
     """
     A simple ping endpoint to check if the service is alive.
@@ -25,6 +31,7 @@ def ping():
 
 
 @main.route("/users", methods=["POST"])
+@track_requests
 def add_user():
     """
     Adds a new user to the database with idempotency check.
@@ -106,6 +113,7 @@ def add_user():
 
 
 @main.route("/users/telegram", methods=["POST"])
+@track_requests
 def add_telegram_chat_id():
     """
     Associates a Telegram chat ID with a user.
@@ -139,6 +147,7 @@ def add_telegram_chat_id():
 
 
 @main.route("/users/<string:email>", methods=["DELETE"])
+@track_requests
 def delete_user(email: str):
     """
     Deletes a user from the database with idempotency check.
@@ -204,6 +213,7 @@ def delete_user(email: str):
 
 
 @main.route("/users/<string:email>", methods=["GET"])
+@track_requests
 def get_user(email: str):
     """
     Gets a user by their email.
@@ -219,6 +229,7 @@ def get_user(email: str):
 
 
 @main.route("/users", methods=["GET"])
+@track_requests
 def get_all_users():
     """
     Gets all users in the database.
