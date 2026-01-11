@@ -10,11 +10,17 @@ from sqlalchemy import func
 
 import services
 from models import db, UserInterest, FlightData
+from metrics import track_requests, metrics_endpoint
+
 
 main = Blueprint("main", __name__)
 
+@main.route("/metrics")
+def metrics():
+    return metrics_endpoint()
 
 @main.route("/ping")
+@track_requests
 def ping():
     """
     A simple ping endpoint to check if the service is alive.
@@ -26,6 +32,7 @@ def ping():
 
 
 @main.route("/interests", methods=["POST"])
+@track_requests
 def add_interest():
     """
     Adds a new user interest and triggers data fetch for the specified airport.
@@ -81,6 +88,7 @@ def add_interest():
 
 
 @main.route("/interests", methods=["PUT"])
+@track_requests
 def update_interest():
     """
     Updates the high and low value thresholds for an existing user interest.
@@ -136,6 +144,7 @@ def update_interest():
 
 
 @main.route("/interests", methods=["DELETE"])
+@track_requests
 def remove_interest():
     """
     Removes a user interest and triggers cleanup if necessary.
@@ -211,6 +220,7 @@ def get_user_interests(email: str):
 
 
 @main.route("/flights/<string:airport_code>", methods=["GET"])
+@track_requests
 def get_flights(airport_code: str):
     """
     Gets flights for a specific airport.
@@ -250,6 +260,7 @@ def get_flights(airport_code: str):
 
 
 @main.route("/flights/average/<string:icao>", methods=["GET"])
+@track_requests
 def get_average_flights(icao: str):
     """
     Calculates the average number of flights per day for a given airport.
@@ -283,6 +294,7 @@ def get_average_flights(icao: str):
 
 
 @main.route("/flights/last/<string:icao>", methods=["GET"])
+@track_requests
 def get_last_flight(icao: str):
     """
     Returns the last flight for a given airport (most recent last_seen).
