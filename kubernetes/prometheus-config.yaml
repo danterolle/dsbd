@@ -17,7 +17,7 @@ data:
       - job_name: 'user-manager'
         kubernetes_sd_configs:
           - role: pod
-        metric_path: /metrics
+        metrics_path: /metrics
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_app]
             action: keep
@@ -33,6 +33,7 @@ data:
       - job_name: 'data-collector'
         kubernetes_sd_configs:
           - role: pod
+        metrics_path: /metrics
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_app]
             action: keep
