@@ -81,13 +81,18 @@ async def main():
 
     # Wait for Topic to be created
     while True:
-        partitions = await consumer.partitions_for_topic(CONSUMER_TOPIC)
-        if partitions:
-            print(f"Topic '{CONSUMER_TOPIC}' found with partitions: {partitions}")
-            break
+        try:
+            # Refresh metadata to discover new topics
+            await consumer._client.force_metadata_update()
+            partitions = consumer.partitions_for_topic(CONSUMER_TOPIC)
+            if partitions is not None and len(partitions) > 0:
+                print(f"Topic '{CONSUMER_TOPIC}' found with partitions: {partitions}")
+                break
+        except Exception as e:
+            print(f"Error checking topic: {e}")
+
         print(f"Topic '{CONSUMER_TOPIC}' not found yet. Waiting...")
         await asyncio.sleep(2)
-        await consumer.force_metadata_update()
 
     print("Starting message consumption...")
     try:
