@@ -7,11 +7,12 @@
   - [2.1. Overview](#21-overview)
   - [2.2. Architectural Diagram](#22-architectural-diagram)
 - [3. Components](#3-components)
-  - [3.1. API Gateway (NGINX)](#31-api-gateway-nginx)
+  - [3.1. API Gateway (Kubernetes Ingress)](#31-api-gateway-kubernetes-ingress)
   - [3.2. User Manager Microservice](#32-user-manager-microservice)
   - [3.3. Data Collector Microservice](#33-data-collector-microservice)
   - [3.4. Alert System Service](#34-alert-system-service)
   - [3.5. Alert Notifier System Service](#35-alert-notifier-system-service)
+  - [3.6. Monitoring (Prometheus)](#36-monitoring-prometheus)
 - [4. Implementation Choices](#4-implementation-choices)
   - [4.1. Coding Standards](#41-coding-standards)
 - [5. Database Schema](#5-database-schema)
@@ -34,24 +35,24 @@
 
 ## 1. Introduction
 
-This document provides a detailed overview of a distributed systems project, which consists of a Dockerized, microservices-based application. The system is designed to manage user data, collect flight information from the OpenSky Network, and provide users with real-time, threshold-based alerts via Telegram.
+This document provides a detailed overview of a distributed systems project, which consists of a microservices-based application orchestrated on **Kubernetes**. The system is designed to manage user data, collect flight information from the OpenSky Network, and provide users with real-time, threshold-based alerts via Telegram. It also includes integrated monitoring via **Prometheus**.
 
-The architecture is composed of four main microservices, an API Gateway, and a message broker:
+The architecture is composed of four main microservices, an Ingress Controller, a message broker, and a monitoring system:
 
 *   **User Manager**: Responsible for handling user registration, deletion, and management of user data, including Telegram chat information.
 *   **Data Collector**: Responsible for fetching flight data from the OpenSky Network based on user interests (including alert thresholds), storing it, and providing processed data through its API. It is also a Kafka producer.
 *   **Alert System**: A Kafka consumer and producer that contains the business logic for checking if flight data crosses user-defined thresholds.
 *   **Alert Notifier System**: A Kafka consumer that sends notifications to users via a Telegram Bot.
 
-The project emphasizes a clean, resilient, and scalable architecture, separation of concerns, and robust inter-service communication utilizing patterns like asynchronous messaging, and Circuit Breaker.
+The project emphasizes a clean, resilient, and scalable architecture, separation of concerns, and robust inter-service communication utilizing patterns like asynchronous messaging, Circuit Breaker, and centralized monitoring.
 
 ## 2. System Architecture
 
 ### 2.1. Overview
 
-The architecture follows a microservices pattern. An **NGINX API Gateway** serves as the single entry point for all external traffic, handling SSL termination and routing requests to the appropriate backend services.
+The architecture follows a microservices pattern deployed on a **Kubernetes** cluster. A **Kubernetes Ingress (NGINX Controller)** serves as the single entry point for all external traffic, handling routing requests to the appropriate backend services.
 
-The services themselves are decoupled via an **Apache Kafka** message broker, which orchestrates the asynchronous notification workflow, making the system more resilient and scalable. Internal cross-service communication for synchronous requests (like user validation) is handled efficiently via **gRPC**. Each microservice has its own dedicated PostgreSQL database, ensuring loose coupling and data isolation.
+The services themselves are decoupled via an **Apache Kafka** message broker, which orchestrates the asynchronous notification workflow, making the system more resilient and scalable. Internal cross-service communication for synchronous requests (like user validation) is handled efficiently via **gRPC**. Each microservice has its own dedicated PostgreSQL database, ensuring loose coupling and data isolation. **Prometheus** scrapes metrics from the services to monitor system health and performance.
 
 ### 2.2. Architectural Diagram
 
@@ -59,17 +60,18 @@ The services themselves are decoupled via an **Apache Kafka** message broker, wh
 
 ## 3. Components
 
-### 3.1. API Gateway (NGINX)
-*   **Purpose**: To act as a reverse proxy, providing a single, unified, and secure entry point for the entire system. It handles SSL/TLS termination, encrypting all external traffic.
+### 3.1. API Gateway (Kubernetes Ingress)
+*   **Purpose**: To act as a reverse proxy, providing a single, unified, and secure entry point for the entire system. It routes external HTTP/HTTPS traffic to the internal Kubernetes services.
 *   **Routing**: Routes requests based on URL prefixes:
-    *   `https://localhost/user-manager/*` is routed to the `user-manager` service.
-    *   `https://localhost/data-collector/*` is routed to the `data-collector` service.
+    *   `/user-manager/*` is routed to the `user-manager` service on port 5000.
+    *   `/data-collector/*` is routed to the `data-collector` service on port 5000.
 
 ### 3.2. User Manager Microservice
 
 *   **Purpose**: To manage user information, including creation, deletion, retrieval of user data, and Telegram notification details.
 
 *   **API Endpoints** (accessed via `/user-manager/` prefix):
+    *   `GET /metrics`: Prometheus metrics endpoint.
     *   `GET /ping`: A health check endpoint.
     *   `POST /users`: Creates a new user.
         *   **Request Body**: `{"email": "...", "first_name": "...", "last_name": "...", "tax_code": "...", "iban": "..."}`
@@ -90,12 +92,14 @@ The services themselves are decoupled via an **Apache Kafka** message broker, wh
 *   **Purpose**: To collect flight data based on user interests, store it, and provide endpoints for data retrieval and analysis. It runs a background job to periodically fetch data from the OpenSky Network.
 
 *   **API Endpoints**:
+    *   `GET /metrics`: Prometheus metrics endpoint.
     *   `GET /ping`: A health check endpoint.
     *   `POST /interests`: Adds a new airport interest for a user. Accepts optional `high_value` and `low_value` fields.
     *   `PUT /interests`: Updates `high_value` and `low_value` for an existing interest.
     *   `DELETE /interests`: Removes an airport interest for a user.
     *   `GET /interests/<email>`: Retrieves all airport interests for a user.
     *   `GET /flights/<airport_code>`: Retrieves flights for a specific airport.
+        *   **Query Parameter**: `type` (optional) can be set to `arrivals` or `departures` to filter results.
     *   `GET /flights/average/<icao>`: Calculates the average number of flights per day for an airport.
     *   `GET /flights/last/<icao>`: Returns the most recent flight recorded for an airport.
 
@@ -121,21 +125,30 @@ The services themselves are decoupled via an **Apache Kafka** message broker, wh
     *   Acts as an asynchronous Kafka **consumer** (using `aiokafka`), listening to the `to-notifier` topic.
     *   Upon receiving an alert, it **connects directly to the `user-manager`'s PostgreSQL database** to retrieve the `telegram_chat_id` for the user's email.
     *   It uses the Telegram Bot API to send the final alert message to the user.
-*   **Design Note**: For simplicity in this project, this service queries another service's database directly. In a stricter, more complex microservice architecture, this could be replaced by an API call to the `User Manager` to further decouple the services.
 
+### 3.6. Monitoring (Prometheus)
+*   **Purpose**: To collect and aggregate metrics from the microservices.
+*   **Functionality**:
+    *   Prometheus is deployed as a service in the cluster.
+    *   It scrapes the `/metrics` endpoints of the `user-manager` and `data-collector` services.
+    *   This allows for real-time monitoring of request counts, latencies, and other custom metrics (e.g., OpenSky API call duration, flights fetched).
+*   **Accessing the Dashboard**: To access the Prometheus web interface from your local machine, use the following command to forward the port:
+    ```bash
+    kubectl port-forward svc/prometheus 9090:9090
+    ```
+    Once the command is running, the dashboard will be available at `http://localhost:9090`.
 
 ## 4. Implementation Choices
 
-*   **Frameworks**: **Flask** is used for the `user-manager` and `data-collector` APIs. It was chosen as the web framework for its lightweight nature, simplicity, and extensive documentation. It provides the necessary tools to build RESTful APIs without imposing a rigid structure, which is well-suited for microservices development.
-*   **API Gateway**: **NGINX** is used as a reverse proxy and SSL termination point.
+*   **Orchestration**: **Kubernetes** (locally via **Kind**) is used to manage the containerized application, providing scaling, self-healing, and service discovery.
+*   **Frameworks**: **Flask** is used for the `user-manager` and `data-collector` APIs.
+*   **API Gateway**: **Kubernetes Ingress (NGINX)** is used for routing and SSL termination.
 *   **Message Broker**: **Apache Kafka** is used for asynchronous messaging.
 *   **Resilience**: **PyBreaker** is used to implement the Circuit Breaker pattern.
+*   **Monitoring**: **Prometheus** is used for metrics collection.
 *   **Async**: **AIOKafka** and **Asyncio** are used in the `alert-notifier-system` for efficient, non-blocking I/O.
-*   **ORM**: **SQLAlchemy** is used as the Object-Relational Mapper (ORM). It offers a powerful and flexible way to interact with the relational database, abstracting away the SQL queries and allowing developers to work with Python objects. Its declarative base and session management are well-suited for the application's needs.
-*   **Inter-service Communication**: **gRPC** was chosen for communication between the `User Manager` and `Data Collector`. Its use of Protocol Buffers allows for a clear, contract-first definition of services and messages, ensuring type safety and high performance, which are critical in a distributed environment.
-*   **Containerization**: **Docker** and **Docker Compose** are used to containerize the application. This approach provides a consistent and reproducible environment for development, testing, and deployment. It simplifies dependency management and ensures that the application runs the same way on any machine.
-
-
+*   **ORM**: **SQLAlchemy** is used as the Object-Relational Mapper (ORM).
+*   **Inter-service Communication**: **gRPC** was chosen for synchronous communication between the `User Manager` and `Data Collector`.
 
 ### 4.1 Coding Standards
 
@@ -189,57 +202,64 @@ The Python code in this project adheres to the **PEP 8** style guide to ensure c
 ### 6.1. Prerequisites
 
 *   Docker
-*   Docker Compose (v1 or v2)
+*   Kind (Kubernetes in Docker)
+*   kubectl
 *   OpenSSL (for generating SSL certificate)
 
 ### 6.2. Configuration
 
-Modify the `.env` file in the project's root directory to add your secret credentials.
-
-```
-# OpenSky Network API Credentials
-OPEN_SKY_CLIENT_ID=your_api_client_id
-OPEN_SKY_CLIENT_SECRET=your_api_client_secret
-
-# Telegram Bot Token (from BotFather)
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-...
-```
+1.  **Environment Variables**: The project uses a `.env` file for building images and `kubernetes/secrets.yaml` for the runtime configuration in the cluster.
+2.  **Secrets**: Open `kubernetes/secrets.yaml` and update the Base64-encoded placeholders (or plain text if configuring before applying) with your actual credentials:
+    *   `OPEN_SKY_CLIENT_ID`
+    *   `OPEN_SKY_CLIENT_SECRET`
+    *   `TELEGRAM_BOT_TOKEN`
+    *   Database credentials.
 
 ### 6.3. SSL Certificate Generation
 
-For HTTPS to work locally, you need to generate a self-signed certificate. The private key and certificate files are ignored by Git and will not be shared. 
+For HTTPS to work locally via Ingress, you need to generate a self-signed certificate.
 
 Run the following command from the project's root directory:
 ```bash
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout nginx-selfsigned.key \
-  -out nginx-selfsigned.crt \
+  -keyout nginx/ssl/nginx-selfsigned.key \
+  -out nginx/ssl/nginx-selfsigned.crt \
   -subj "/C=IT/ST=Italy/L=CT/O=Uni/OU=Dev/CN=localhost"
 ```
-This will create the necessary `.key` and `.crt` files in the **project root directory**. You will then need to **move** these files into the `nginx/ssl/` directory (i.e., `mv nginx-selfsigned.key nginx/ssl/` and `mv nginx-selfsigned.crt nginx/ssl/`). For collaborators, if you do not wish to generate them, you may need to obtain these files from the project owner.
+This will create the necessary `.key` and `.crt` files in the `nginx/ssl/` directory.
 
 ### 6.4. Running the Application
 
-You can run the entire application using Docker Compose.
+The project includes a helper script to automate the deployment process on a local Kind cluster.
 
-**Using Docker Compose v1:**
-```bash
-sudo docker-compose up --build -d
-```
+1.  **Make the script executable**:
+    ```bash
+    chmod +x setup_cluster.sh
+    ```
 
-**Using Docker Compose v2:**
-```bash
-sudo docker compose up --build -d
-```
+2.  **Run the setup script**:
+    ```bash
+    ./setup_cluster.sh
+    ```
+    This script will:
+    *   Create a Kind cluster named `dsbd-cluster` (if missing).
+    *   Build the Docker images for all services.
+    *   Load the images into the Kind cluster.
+    *   Install the NGINX Ingress Controller.
+    *   Apply all Kubernetes manifests (Deployments, Services, Secrets, Ingress, Prometheus).
 
-The services are accessible through the API Gateway at **`https://localhost`**. HTTP traffic on `http://localhost:8080` is automatically redirected to HTTPS.
+3.  **Verify Deployment**:
+    Check the status of the pods:
+    ```bash
+    kubectl get pods
+    ```
+    Wait until all pods are in the `Running` state.
 
-**Note**: Since a self-signed certificate is used, you must accept the browser's security warning or use the `-k` flag with `curl`.
+The services are accessible via Ingress at **`https://localhost`**. HTTP traffic is automatically redirected to HTTPS.
 
 ### 6.5. Testing with Postman
 
-The repository includes a Postman collection file: `DSBD.postman_collection.json`. You can import this file into Postman to get a pre-configured set of requests for all the main API endpoints, making it easy to test the system's functionality. Remember to update the base URL to `https://localhost`.
+The repository includes a Postman collection file: `DSBD.postman_collection.json`. You can import this file into Postman to get a pre-configured set of requests for all the main API endpoints. Ensure the base URL is set to `https://localhost`.
 
 ## 7. At-Most-Once Semantics (Idempotency)
 
