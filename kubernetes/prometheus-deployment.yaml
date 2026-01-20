@@ -42,7 +42,7 @@ spec:
           configMap:
             name: prometheus-config
         - name: prometheus-storage
-          emptyDir: {}
+          emptyDir: {} # if we want to save the data, we should use PersistentVolumeClaim
 ---
 apiVersion: v1
 kind: Service
