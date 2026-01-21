@@ -1,2 +1,4 @@
 kafka-python
 python-dotenv
+flask
+prometheus_client

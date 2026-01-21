@@ -1,7 +1,8 @@
 import asyncio
 import json
-import os
+import threading
 import telegram
+from flask import Flask, jsonify
 from aiokafka import AIOKafkaConsumer
 from sqlalchemy import create_engine, Column, String
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -12,9 +13,23 @@ from config import (
     TELEGRAM_BOT_TOKEN,
     DATABASE_URL,
 )
+from metrics import track_requests, metrics_endpoint, track_notification_sent
 
 Base = declarative_base()
 
+app = Flask(__name__)
+
+@app.route("/metrics")
+def metrics():
+    return metrics_endpoint()
+
+@app.route("/ping")
+@track_requests
+def ping():
+    return jsonify({"message": "pong"}), 200
+
+def run_flask():
+    app.run(host="0.0.0.0", port=5000)
 
 class User(Base):
     __tablename__ = "users"
@@ -126,20 +141,25 @@ async def main():
                                     parse_mode=telegram.constants.ParseMode.MARKDOWN,
                                 )
                                 print(f"Sent Telegram notification to {user_email}")
+                                track_notification_sent(True)
                             except Exception as e:
                                 print(
                                     f"Failed to send Telegram message to {user_email}: {e}"
                                 )
+                                track_notification_sent(False)
                         else:
                             print(f"Telegram Bot not configured. Cannot send message to {user_email}.")
+                            track_notification_sent(False)
                     else:
                         print(
                             f"User {user_email} not found or has no Telegram chat ID."
                         )
+                        track_notification_sent(False)
                 finally:
                     await loop.run_in_executor(None, db_session.close)
             except Exception as e:
                 print(f"Error processing message: {e}")
+                track_notification_sent(False)
 
     finally:
         await consumer.stop()
@@ -147,7 +167,9 @@ async def main():
 
 
 async def run_app():
-    """Starts the main application directly (removed long sleep)."""
+    """Starts the main application and Flask server in a separate thread."""
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
     await main()
 
 
