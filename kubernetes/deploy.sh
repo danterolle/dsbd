@@ -118,11 +118,11 @@ case $ACTION in
         deploy "$@"
         ;;
     down)
-        stop_port_forward
-        if kind get clusters != "No kind clusters found."; then
+        if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
+            stop_port_forward
             delete_cluster
         else
-            echo "[!] '${CLUSTER_NAME}' cluster does not exist. Nothing to delete."
+            echo "[!] ${CLUSTER_NAME} cluster does not exist. Nothing to delete."
         fi
         ;;
     stop-pf)
