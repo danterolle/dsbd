@@ -200,9 +200,9 @@ def fetch_and_store_flights(airport_code: str, app) -> None:
                 save_flight_data(flights)
                 send_alert_to_kafka(airport_code, flight_count)
         else:
-            track_opensky_call(airport_code, duration, success=False)
+            track_opensky_call(airport_code, duration, success=True)
             track_flights_fetched(airport_code, 0)
-            print(f"Failed to fetch flights for {airport_code} (possibly token error).")
+            print(f"No flights found for {airport_code} in the last 24 hours.")
     except CircuitBreakerError:
         duration = time.time() - start_time
         track_opensky_call(airport_code, duration, success=False)
