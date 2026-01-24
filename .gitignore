@@ -4,3 +4,4 @@ venv/
 nginx/ssl/nginx-selfsigned.crt
 nginx/ssl/nginx-selfsigned.key
 kubernetes/secrets.yaml
+package-lock.json
