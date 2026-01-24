@@ -2,4 +2,5 @@ venv/
 .idea
 .env
 nginx/ssl/nginx-selfsigned.crt
+nginx/ssl/nginx-selfsigned.key
 nginx/ssl/nginx-selfsigned.keykubernetes/secrets.yaml
