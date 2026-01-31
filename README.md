@@ -17,7 +17,7 @@ The assignment specifications and deliverables for each phase are available in t
 
 ## Project Status
 
-This project implements a comprehensive microservices architecture with advanced features like an API Gateway, asynchronous messaging, Circuit Breaker, and integrated monitoring. It includes a **Mock Data Generator** for offline testing and an **Alert Notifier** that integrates with Telegram.
+This project implements a comprehensive microservices architecture with advanced features like an API Gateway, asynchronous messaging, Circuit Breaker, and integrated monitoring. It includes a **Mock Data Generator** for offline testing, an **Alert Notifier** that integrates with Telegram, and **Load Testing validation via Locust**.
 
 ## Architecture
 
@@ -52,6 +52,13 @@ The Python code in this project adheres to the **PEP 8** style guide. All docstr
     *   **Prometheus**: `http://localhost:30090`
 
     For a full End-to-End test guide (including triggering Telegram alerts), please refer to the **[Deployment Guide](kubernetes/deploy.md)**.
+
+4.  **Load Test (Optional)**:
+    Run Locust to stress-test the architecture:
+    ```bash
+    locust
+    ```
+    Access the dashboard at `http://localhost:8089`.
 
 ## Postman Collection
 
