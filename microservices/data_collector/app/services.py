@@ -36,10 +36,8 @@ from metrics import track_opensky_call, track_flights_fetched
 cached_token = None
 cached_expiry = 0
 
-# Create a circuit breaker
 breaker = CircuitBreaker(fail_max=5, reset_timeout=60)
 
-# Create a Kafka producer
 producer = KafkaProducer(
     bootstrap_servers=KAFKA_BROKER_URL,
     value_serializer=lambda v: json.dumps(v).encode("utf-8"),
