@@ -12,7 +12,11 @@ Ensure you have the following installed:
 
 ## 2. Deployment Script (`deploy.sh`)
 
-The `deploy.sh` script automates the entire lifecycle of the deployment, including cluster creation, image building, manifest application, and verification.
+The `deploy.sh` script automates the entire lifecycle of the deployment.
+
+**Note on Cluster Topology:**
+By default, the script creates a **Single-Node Cluster** (Control Plane + Worker in one) to save resources. 
+If you wish to simulate a **Multi-Node Cluster** (1 Control Plane + 2 Workers), open `kubernetes/deploy.sh` and uncomment the worker lines at the bottom of the Kind configuration section before running the script.
 
 ### Usage
 
