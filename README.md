@@ -21,7 +21,7 @@ This project implements a comprehensive microservices architecture with advanced
 
 ## Architecture
 
-![Architectural Diagram](diagrams/final_architecture.png)
+![Architectural Diagram](img/hw2_architecture.png)
 
 The system's architecture is built around several decoupled microservices orchestrated on Kubernetes. An **NGINX API Gateway** provides a single, secure entry point, routing requests to the appropriate services. Asynchronous communication is handled by **Apache Kafka**, which connects data producers (like the `data-collector`) to consumers (like the `alert-system` and `alert-notifier-system`). The `data-collector` integrates a **Circuit Breaker** for resilience against external API failures. The entire system is monitored using **Prometheus**, collecting custom metrics from the microservices.
 
