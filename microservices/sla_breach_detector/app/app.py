@@ -4,21 +4,26 @@ SLA Breach Detector Microservice.
 Monitors GAUGE metrics via Prometheus and detects SLA violations.
 """
 
+import json
 import logging
 import os
+import time
+
 import requests
 import yaml
-from flask import Flask
-from prometheus_client import Counter
+from apscheduler.schedulers.background import BackgroundScheduler
+from flask import Flask, jsonify, request
+from kafka import KafkaProducer
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-config = {}
-history = {}
-breach_stats = {}
+config: dict = {}
+history: dict[str, list] = {}
+breach_stats: dict[str, dict[str, int]] = {}
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "config.yaml")
 
@@ -86,8 +91,6 @@ def get_kafka_producer():
     global producer
     if producer is None:
         try:
-            from kafka import KafkaProducer
-            import json
             bootstrap_servers = config.get('settings', {}).get('kafka_bootstrap_servers', 'kafka:9092')
             producer = KafkaProducer(
                 bootstrap_servers=bootstrap_servers,
@@ -102,17 +105,16 @@ def get_kafka_producer():
 
 
 def check_sla():
-    import time
     logger.info("Running SLA check cycle...")
     sla_checks_total.labels(service=SERVICE_NAME).inc()
-    
+
     prom_url = config.get('settings', {}).get('prometheus_url', 'http://prometheus:9090')
     metrics = config.get('metrics', [])
 
     for metric in metrics:
         if metric.get('type', 'gauge').lower() != 'gauge':
             continue
-            
+
         name = metric['name']
         query = metric['query']
         min_val = metric['min']
@@ -173,7 +175,8 @@ def check_sla():
                             "observed_value": val_violated,
                             "threshold_violated": threshold,
                             "breach_type": breach_type,
-                            "violations_count": breach_stats[name]["min"] if breach_type == "low" else breach_stats[name]["max"]
+                            "violations_count": breach_stats[name]["min"] if breach_type == "low" else
+                            breach_stats[name]["max"]
                         }
                         prod.send(topic, message)
                         logger.info(f"Notification sent to Kafka topic {topic}")
@@ -186,7 +189,6 @@ def check_sla():
             logger.error(f"Error checking SLA for {name}: {e}")
 
 
-from apscheduler.schedulers.background import BackgroundScheduler
 scheduler = BackgroundScheduler()
 
 
@@ -199,10 +201,6 @@ def start_scheduler():
 
 
 start_scheduler()
-
-
-from flask import jsonify, request
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 
 @app.route('/metrics')
@@ -272,6 +270,5 @@ def ping():
 
 
 if __name__ == '__main__':
-    import time
     time.sleep(5)
     app.run(host='0.0.0.0', port=5000)
