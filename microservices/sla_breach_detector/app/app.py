@@ -199,3 +199,79 @@ def start_scheduler():
 
 
 start_scheduler()
+
+
+from flask import jsonify, request
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
+
+@app.route('/metrics')
+def metrics():
+    return generate_latest(), 200, {"Content-Type": CONTENT_TYPE_LATEST}
+
+
+@app.route('/sla/config', methods=['GET'])
+def get_config():
+    return jsonify(config)
+
+
+@app.route('/sla/config', methods=['POST'])
+def update_config():
+    global config
+    new_config = request.json
+    if not new_config:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    t_check = new_config.get('settings', {}).get('t_check', 0)
+    t_scrape = get_prometheus_scrape_interval()
+    if t_check < 5 * t_scrape:
+        return jsonify({
+            "error": "Constraint violation",
+            "message": f"T_check ({t_check}) must be >= 5 * T_scrape ({t_scrape})"
+        }), 400
+
+    for metric in new_config.get('metrics', []):
+        metric_type = metric.get('type', 'gauge').lower()
+        if metric_type != 'gauge':
+            return jsonify({
+                "error": "Invalid metric type",
+                "message": f"Metric '{metric['name']}' must be type 'gauge', got '{metric_type}'"
+            }), 400
+
+    config = new_config
+    try:
+        with open(CONFIG_PATH, 'w') as f:
+            yaml.dump(config, f)
+    except Exception as e:
+        logger.error(f"Failed to save config: {e}")
+
+    for metric in config.get('metrics', []):
+        name = metric['name']
+        if name not in breach_stats:
+            breach_stats[name] = {"min": 0, "max": 0}
+        if name not in history:
+            history[name] = []
+
+    start_scheduler()
+    return jsonify({"status": "updated", "config": config})
+
+
+@app.route('/breach/stats', methods=['GET'])
+def get_stats():
+    return jsonify(breach_stats)
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "ok", "scheduler_running": scheduler.running})
+
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({"message": "pong"})
+
+
+if __name__ == '__main__':
+    import time
+    time.sleep(5)
+    app.run(host='0.0.0.0', port=5000)
