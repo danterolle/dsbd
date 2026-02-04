@@ -4,19 +4,44 @@ metrics:
     query: "avg(http_request_duration_seconds{service='user_manager'})"
     min: 0
     max: 0.5
+  - name: "user_manager_active_requests"
+    type: "gauge"
+    query: "sum(http_requests_in_progress{service='user_manager'})"
+    min: 0
+    max: 20
   - name: "data_collector_opensky_duration"
     type: "gauge"
     query: "avg(opensky_api_duration_seconds)"
     min: 0
     max: 2.0
+  - name: "data_collector_flights_fetched"
+    type: "gauge"
+    query: "sum(flights_fetched_last_collection)"
+    min: 1
+    max: 1000
+  - name: "data_collector_active_requests"
+    type: "gauge"
+    query: "sum(http_requests_in_progress{service='data_collector'})"
+    min: 0
+    max: 10
   - name: "alert_system_duration"
     type: "gauge"
     query: "avg(http_request_duration_seconds{service='alert_system'})"
     min: 0
     max: 0.5
-  - name: "data_collector_active_requests"
+  - name: "alert_system_active_requests"
     type: "gauge"
-    query: "sum(http_requests_in_progress{service='data_collector'})"
+    query: "sum(http_requests_in_progress{service='alert_system'})"
+    min: 0
+    max: 10
+  - name: "alert_notifier_duration"
+    type: "gauge"
+    query: "avg(http_request_duration_seconds{service='alert_notifier_system'})"
+    min: 0
+    max: 0.5
+  - name: "alert_notifier_active_requests"
+    type: "gauge"
+    query: "sum(http_requests_in_progress{service='alert_notifier_system'})"
     min: 0
     max: 10
 
