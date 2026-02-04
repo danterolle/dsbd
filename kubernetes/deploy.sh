@@ -1,8 +1,8 @@
 #!/bin/bash
 
 CLUSTER_NAME="flight-tracker"
-SERVICES=("user-manager" "data-collector" "alert-system" "alert-notifier-system")
-PF_PORTS=("5000:5000" "5001:5000" "5002:5000" "5003:5000")
+SERVICES=("user-manager" "data-collector" "alert-system" "alert-notifier-system" "sla-breach-detector")
+PF_PORTS=("5000:5000" "5001:5000" "5002:5000" "5003:5000" "5004:5000")
 
 TIMEOUT_POD_READY=600
 TIMEOUT_DEPLOYMENT=600
@@ -29,7 +29,7 @@ usage() {
 
 stop_port_forward() {
     echo "[*] Stopping existing port-forwarding processes..."
-    PIDS=$(pgrep -f "kubectl port-forward svc/(user-manager|data-collector|alert-system|alert-notifier-system)") || true
+    PIDS=$(pgrep -f "kubectl port-forward svc/(user-manager|data-collector|alert-system|alert-notifier-system|sla-breach-detector)") || true
     if [ -n "$PIDS" ]; then
         echo "$PIDS" | xargs kill -9 2>/dev/null || true
         echo "[!] Port-forwarding stopped."
@@ -100,6 +100,10 @@ nodes:
   - containerPort: 30003
     hostPort: 30003
     protocol: TCP
+  # SLA Breach Detector NodePort
+  - containerPort: 30004
+    hostPort: 30004
+    protocol: TCP
   # HTTP for Ingress
   - containerPort: 80
     hostPort: 80
@@ -139,12 +143,14 @@ EOF
     docker build -t data-collector:latest ./microservices/data_collector
     docker build -t alert-system:latest ./microservices/alert_system
     docker build -t alert-notifier-system:latest ./microservices/alert_notifier_system
+    docker build -t sla-breach-detector:latest ./microservices/sla_breach_detector
 
     echo "[+] copy the Docker images into the ${CLUSTER_NAME} cluster nodes"
     kind load docker-image user-manager:latest --name ${CLUSTER_NAME}
     kind load docker-image data-collector:latest --name ${CLUSTER_NAME}
     kind load docker-image alert-system:latest --name ${CLUSTER_NAME}
     kind load docker-image alert-notifier-system:latest --name ${CLUSTER_NAME}
+    kind load docker-image sla-breach-detector:latest --name ${CLUSTER_NAME}
 
     echo "[+] applying k8s manifests..."
     kubectl apply -f kubernetes/
@@ -180,6 +186,7 @@ EOF
         echo "Ingress enabled! Access services via:"
         echo "    - User Manager:   curl http://localhost/user-manager/ping"
         echo "    - Data Collector: curl http://localhost/data-collector/ping"
+        echo "    - SLA Detector:   curl http://localhost/sla-detector/ping"
     fi
 
     if [ "$START_PF" = true ]; then
@@ -193,6 +200,7 @@ EOF
         echo "    - Data Collector: http://localhost:5001"
         echo "    - Alert System: http://localhost:5002"
         echo "    - Alert Notifier: http://localhost:5003"
+        echo "    - SLA Detector: http://localhost:5004"
     else
         if [ "$INSTALL_INGRESS" = false ]; then
             echo ""
