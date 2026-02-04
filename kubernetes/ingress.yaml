@@ -24,3 +24,10 @@ spec:
                 name: data-collector
                 port:
                   number: 5000
+          - path: /sla-detector(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: sla-breach-detector
+                port:
+                  number: 5000
