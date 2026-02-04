@@ -78,6 +78,15 @@ def load_config():
             if name not in history:
                 history[name] = []
         logger.info("Configuration loaded successfully")
+        
+        # Enforce T_check constraint at startup
+        t_check = config.get('settings', {}).get('t_check', 80)
+        t_scrape = get_prometheus_scrape_interval()
+        if t_check < 5 * t_scrape:
+            new_t_check = 5 * t_scrape
+            logger.warning(f"T_check ({t_check}) is too low relative to T_scrape ({t_scrape}). Increasing to {new_t_check}s")
+            config['settings']['t_check'] = new_t_check
+
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
 
