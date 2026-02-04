@@ -1,0 +1,27 @@
+metrics:
+  - name: "user_manager_avg_response_time"
+    type: "gauge"
+    query: "avg(http_request_duration_seconds{service='user_manager'})"
+    min: 0
+    max: 0.5
+  - name: "data_collector_opensky_duration"
+    type: "gauge"
+    query: "avg(opensky_api_duration_seconds)"
+    min: 0
+    max: 2.0
+  - name: "alert_system_duration"
+    type: "gauge"
+    query: "avg(http_request_duration_seconds{service='alert_system'})"
+    min: 0
+    max: 0.5
+  - name: "data_collector_active_requests"
+    type: "gauge"
+    query: "sum(http_requests_in_progress{service='data_collector'})"
+    min: 0
+    max: 10
+
+settings:
+  t_check: 80
+  prometheus_url: "http://prometheus:9090"
+  kafka_bootstrap_servers: "kafka:9092"
+  kafka_topic: "sla_breach"
