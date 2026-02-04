@@ -1,6 +1,8 @@
 # Distributed Systems and Big Data (DSBD) Project
 
-This project is a distributed system designed to manage user information, collect flight data from the OpenSky Network, provide real-time, threshold-based alerts via Telegram, and is deployed on Kubernetes with Prometheus monitoring.
+This project is a distributed system designed to manage user information, collect flight data from the OpenSky Network, provide real-time, threshold-based alerts via Telegram, monitor SLA compliance, and is deployed on Kubernetes with Prometheus monitoring.
+
+> Note: the microservice `sla_breach_detector` and all its other implementations were written exclusively by Dario Camonita as required to satisfy the requirements of the comprehensive exam.
 
 **Students:**
 - Dario Camonita
@@ -49,6 +51,7 @@ The Python code in this project adheres to the **PEP 8** style guide. All docstr
     The system uses **NodePorts** by default, making services accessible at:
     *   **User Manager**: `http://localhost:30000`
     *   **Data Collector**: `http://localhost:30001`
+    *   **SLA Breach Detector**: `http://localhost:30004`
     *   **Prometheus**: `http://localhost:30090`
 
     For a full End-to-End test guide (including triggering Telegram alerts), please refer to the **[Deployment Guide](kubernetes/deploy.md)**.
