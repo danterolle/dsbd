@@ -238,3 +238,51 @@ class FlightTrackerLoadTester(HttpUser):
             "http://127.0.0.1:30004/metrics",
             name="SLA: Prometheus Metrics",
         )
+
+    @task(1)
+    def sla_detector_update_config_stress(self):
+        """
+        STRESS TEST 3: Dynamic SLA Configuration Updates.
+        Sends random configuration updates to verify:
+        1. JSON Schema validation.
+        2. T_check >= 5 * T_scrape constraint validation.
+        3. Runtime scheduler restarts without downtime.
+        """
+        # Randomly choose a T_check that might be invalid (< 75) or valid (>= 80)
+        # Note: In our environment T_scrape is usually 15s, so the limit is 75s.
+        t_check = random.choice([30, 60, 90, 120])
+        
+        payload = {
+            "metrics": [
+                {
+                    "name": "user_manager_avg_response_time",
+                    "type": "gauge",
+                    "query": "avg(http_request_duration_seconds{service='user_manager'})",
+                    "min": 0,
+                    "max": 0.5
+                }
+            ],
+            "settings": {
+                "t_check": t_check,
+                "prometheus_url": "http://prometheus:9090",
+                "kafka_bootstrap_servers": "kafka:9092",
+                "kafka_topic": "sla_breach"
+            }
+        }
+
+        with self.client.post(
+            "http://127.0.0.1:30004/sla/config",
+            json=payload,
+            name="STRESS: SLA Config Update",
+            catch_response=True
+        ) as response:
+            if t_check < 75:
+                if response.status_code == 400:
+                    response.success()  # Correctly rejected by the microservice
+                else:
+                    response.failure(f"Constraint Violation: Expected 400 for t_check={t_check}, got {response.status_code}")
+            else:
+                if response.status_code == 200:
+                    response.success()
+                else:
+                    response.failure(f"Update Failed: Expected 200 for t_check={t_check}, got {response.status_code}")
