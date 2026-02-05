@@ -37,6 +37,7 @@
   - [9.1. Running a Load Test](#91-running-a-load-test)
   - [9.2. Analyzing Results](#92-analyzing-results)
   - [9.3. Test Report: OOM Crash & Fix](#93-test-report-oom-crash--fix)
+- [10. Circuit Breaker Testing](#10-circuit-breaker-testing)
 
 ## 1. Introduction
 
@@ -482,3 +483,45 @@ During the initial load test (100 users, 10 spawn rate), we observed a critical 
 - **Root Cause Analysis**: Kubernetes logs revealed an **OOMKilled** (Out Of Memory) error with exit code **137**. The container had exceeded its hard limit of **256Mi**.
 - **Resolution**: We increased the memory limit to **512Mi** in the `data-collector-deployment.yaml` manifest.
 - **Verification**: A subsequent test ran successfully with **zero failures** over 1600+ requests. We observed that the `data-collector` exhibits higher latency (~1.5s) compared to the lightweight `user-manager` (~20ms), which is consistent with the heavier computational load of processing flight data.
+
+## 10. Circuit Breaker Testing
+
+To manually verify the reliability of the Circuit Breaker and the fallback to mock data, follow this procedure:
+
+1.  **Modify the Code (Sabotage)**:
+    Open `microservices/data_collector/app/services.py`, locate the `call_opensky` function, and inject an exception to simulate a network failure:
+
+    ```
+    @breaker
+    def call_opensky(api_url: str, params: Optional[dict] = None) -> Optional[dict]:
+        # --- TEST MODIFICATION START ---
+        # Simulate a network error to trigger the circuit breaker
+        raise requests.exceptions.ConnectTimeout("Test: Simulated Connection Failure!")
+        # --- TEST MODIFICATION END ---
+        
+        token = get_opensky_token()
+        # ...
+    ```
+
+    *Optional*: To speed up the test, reduce the sleep time in `data_collection_job` from `300` to `10` seconds.
+
+2.  **Deploy Changes**:
+    Apply the changes to the cluster:
+
+    ```
+    ./kubernetes/deploy.sh up
+    ```
+
+3.  **Observe Logs**:
+    Monitor the `data-collector` logs:
+
+    ```
+    kubectl logs -f -l app=data-collector
+    ```
+
+    - **Phase 1**: You will see five consecutive errors (`Error calling OpenSky API...`).
+    - **Phase 2**: You will see the circuit breaker opening (`CircuitBreakerError: Failures threshold reached, circuit open`).
+    - **Confirmation**: The logs will confirm that mock data is being used: `Found X flights for Y (Source: Mock)`.
+
+4.  **Restore**:
+    Remove the injected exception and run `./kubernetes/deploy.sh up` again to restore normal operation.
