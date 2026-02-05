@@ -48,23 +48,25 @@ The services are accessible via multiple methods.
 ### Method A: NodePorts (Standard)
 The cluster is configured to map these ports directly to your localhost (via `extraPortMappings` in `kind` config).
 
-| Service            | Local URL                |
-|:-------------------|:-------------------------|
-| **User Manager**   | `http://localhost:30000` |
-| **Data Collector** | `http://localhost:30001` |
-| **Alert System**   | `http://localhost:30002` |
-| **Alert Notifier** | `http://localhost:30003` |
-| **Prometheus**     | `http://localhost:30090` |
+| Service                 | Local URL                |
+|:------------------------|:-------------------------|
+| **User Manager**        | `http://localhost:30000` |
+| **Data Collector**      | `http://localhost:30001` |
+| **Alert System**        | `http://localhost:30002` |
+| **Alert Notifier**      | `http://localhost:30003` |
+| **SLA Breach Detector** | `http://localhost:30004` |
+| **Prometheus**          | `http://localhost:30090` |
 
 ### Method B: Port-Forwarding (with `--pf`)
 If you run with `--pf`, the script creates background `kubectl port-forward` processes:
 
-| Service            | Local URL               |
-|:-------------------|:------------------------|
-| **User Manager**   | `http://localhost:5000` |
-| **Data Collector** | `http://localhost:5001` |
-| **Alert System**   | `http://localhost:5002` |
-| **Alert Notifier** | `http://localhost:5003` |
+| Service                 | Local URL               |
+|:------------------------|:------------------------|
+| **User Manager**        | `http://localhost:5000` |
+| **Data Collector**      | `http://localhost:5001` |
+| **Alert System**        | `http://localhost:5002` |
+| **Alert Notifier**      | `http://localhost:5003` |
+| **SLA Breach Detector** | `http://localhost:5004` |
 
 ### Method C: Ingress (with `--ingress`)
 If installed, services are routed via an NGINX Ingress Controller on port 80:
@@ -73,6 +75,7 @@ If installed, services are routed via an NGINX Ingress Controller on port 80:
 |:-------------------|:------------------|:---------------------------------------|
 | **User Manager**   | `/user-manager`   | `http://localhost/user-manager/ping`   |
 | **Data Collector** | `/data-collector` | `http://localhost/data-collector/ping` |
+| **SLA Detector**    | `/sla-detector`   | `http://localhost/sla-detector/ping`   |
 
 ## 4. Automatic Database Seeding
 
@@ -117,6 +120,16 @@ These examples use the **NodePorts (Method A)**.
 | **Alert System**   | `curl http://localhost:30002/ping` |
 | **Alert Notifier** | `curl http://localhost:30003/ping` |
 
+### SLA Breach Detector (Port 30004)
+
+| Action             | Command Example                                                        |
+|:-------------------|:-----------------------------------------------------------------------|
+| **Ping**           | `curl http://localhost:30004/ping`                                     |
+| **Health**         | `curl http://localhost:30004/health`                                   |
+| **Get Config**     | `curl http://localhost:30004/sla/config`                               |
+| **Breach Stats**   | `curl http://localhost:30004/breach/stats`                             |
+| **Metrics**        | `curl http://localhost:30004/metrics`                                  |
+
 ## 6. Monitoring (Prometheus)
 
 Access the Prometheus UI at: [http://localhost:30090](http://localhost:30090)
@@ -139,8 +152,6 @@ The deployment includes:
 - **Prometheus**: For metrics collection.
 
 ---
-
-## 7. End-to-End Test: Triggering an Alert
 
 ## 7. End-to-End Test: Triggering an Alert
 
@@ -181,7 +192,50 @@ Start a chat with **@sky_dsbd_bot** on Telegram so it can message you.
 ### Step 5: Wait
 The system checks flights periodically (configured interval). When the condition is met, you should receive a Telegram message.
 
-## 8. Troubleshooting
+## 8. Testing SLA Breach Detection
+
+The SLA Breach Detector monitors Prometheus metrics. You can trigger a breach by lowering a threshold.
+
+### Step 1: Get Current Config
+```bash
+curl http://localhost:30004/sla/config
+```
+
+### Step 2: Trigger a Breach
+Update the threshold for a metric (e.g., `user_manager_avg_response_time`) to a very low value (e.g., `0.0001`) to force a high-violation breach.
+
+```bash
+curl -X POST http://localhost:30004/sla/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metrics": [
+      {
+        "name": "user_manager_avg_response_time",
+        "type": "gauge",
+        "query": "avg(http_request_duration_seconds{service=\"user_manager\"})",
+        "min": 0,
+        "max": 0.0001
+      }
+    ],
+    "settings": {
+      "t_check": 30,
+      "prometheus_url": "http://prometheus:9090",
+      "kafka_bootstrap_servers": "kafka:9092",
+      "kafka_topic": "sla_breach"
+    }
+  }'
+```
+
+### Step 3: Check Stats
+Wait for a few check cycles (30s each) and check if the breach is recorded:
+```bash
+curl http://localhost:30004/breach/stats
+```
+
+### Step 4: Verify Telegram Notification
+The default admin (`mario.rossi@gmail.com`) will receive a Telegram message notification about the breach.
+
+## 9. Troubleshooting
 
 **View Logs:**
 ```bash
