@@ -38,6 +38,11 @@
   - [9.2. Analyzing Results](#92-analyzing-results)
   - [9.3. Test Report: OOM Crash & Fix](#93-test-report-oom-crash--fix)
 - [10. Circuit Breaker Testing](#10-circuit-breaker-testing)
+- [11. SLA Breach Detector Testing](#11-sla-breach-detector-testing)
+  - [11.1. Prerequisites](#111-prerequisites)
+  - [11.2. Method 1: Using Synthetic Metrics (Recommended)](#112-method-1-using-synthetic-metrics-recommended)
+  - [11.3. Method 2: Traffic Stress Test](#113-method-2-traffic-stress-test)
+  - [11.4. Verifying Notifications](#114-verifying-notifications)
 
 ## 1. Introduction
 
@@ -525,3 +530,106 @@ To manually verify the reliability of the Circuit Breaker and the fallback to mo
 
 4.  **Restore**:
     Remove the injected exception and run `./kubernetes/deploy.sh up` again to restore normal operation.
+
+## 11. SLA Breach Detector Testing
+
+To intentionally trigger an SLA breach and verify the notification pipeline, follow these steps.
+
+### 11.1. Prerequisites
+
+Ensure the `sla-breach-detector` service is running and accessible (default port 30004).
+
+### 11.2. Method 1: Using Synthetic Metrics (Recommended)
+
+The most reliable way to test the logic is to use a PromQL query that returns a constant value, bypassing the need for actual traffic load.
+
+1.  **Inject Faulty Configuration**:
+    Send a `POST` request to configure a metric that always returns `0.5` (using `vector(0.5)`), while setting the minimum required threshold to `1.0`. This simulates a persistent "under-performance" or "low value" violation.
+
+    **Request**:
+    ```
+    curl -X POST http://localhost:30004/sla/config \
+      -H "Content-Type: application/json" \
+      -d '{
+        "metrics": [
+          {
+            "name": "test_synthetic_metric",
+            "type": "gauge",
+            "query": "vector(0.5)",
+            "min": 1.0,
+            "max": 5.0
+          }
+        ],
+        "settings": {
+          "t_check": 80,
+          "prometheus_url": "http://prometheus:9090",
+          "kafka_bootstrap_servers": "kafka:9092",
+          "kafka_topic": "sla_breach"
+        }
+      }'
+    ```
+
+    *Note: `t_check` is set to 80s to satisfy the safety constraint (`t_check >= 5 * scrape_interval`).*
+
+2.  **Wait for Detection**:
+    The system requires **3 consecutive samples** to confirm a breach.
+    -   T+0s: Config applied.
+    -   T+80s: First sample (0.5 < 1.0).
+    -   T+160s: Second sample (0.5 < 1.0).
+    -   T+240s: Third sample -> **BREACH DETECTED**.
+
+3.  **Verify**:
+    After ~4 minutes, check the breach statistics:
+
+    ```
+    curl http://localhost:30004/breach/stats
+    ```
+
+    **Expected Output**:
+    ```json
+    {
+      "test_synthetic_metric": {
+        "min": 1,
+        "max": 0
+      }
+    }
+    ```
+
+### 11.3. Method 2: Traffic Stress Test
+
+Alternatively, you can stress the system with Locust and lower the maximum threshold.
+
+1.  **Configure SLA**:
+    Set `max` threshold for `user_manager_avg_response_time` to an extremely low value (e.g., `0.0001s`).
+
+    ```
+    curl -X POST http://localhost:30004/sla/config \
+      -H "Content-Type: application/json" \
+      -d '{
+        "metrics": [{
+          "name": "user_manager_response",
+          "type": "gauge",
+          "query": "avg(http_request_duration_seconds{service=\"user_manager\"})",
+          "min": 0,
+          "max": 0.0001
+        }],
+        "settings": {"t_check": 80}
+      }'
+    ```
+
+2.  **Generate Traffic**:
+    Run Locust to generate requests, ensuring the metric has a value (> 0).
+    ```
+    locust --headless -u 10 -r 2 --run-time 5m --host http://localhost:30000
+    ```
+
+3.  **Verify**:
+    Check `http://localhost:30004/breach/stats`. You should see increments in the `max` counter.
+
+### 11.4. Verifying Notifications
+
+If you have configured the Admin email, you will receive a Telegram message. Otherwise, check the Kafka logs to confirm the event was published:
+
+```
+kubectl logs -l app=sla-breach-detector | grep "Notification sent"
+```
