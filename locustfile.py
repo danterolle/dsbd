@@ -31,7 +31,7 @@ class FlightTrackerLoadTester(HttpUser):
         Pings all exposed microservices (ports 30000-30003) to ensure they are reachable.
         Uses catch_response to manually handle and log failures in the statistics.
         """
-        services = [30000, 30001, 30002, 30003]
+        services = [30000, 30001, 30002, 30003, 30004]
         for port in services:
             with self.client.get(
                 f"http://127.0.0.1:{port}/ping",
@@ -188,4 +188,53 @@ class FlightTrackerLoadTester(HttpUser):
 
         self.client.get(
             f"http://127.0.0.1:30001/flights/{target}", name="STRESS: DB Bulk Fetch"
+        )
+
+    @task(2)
+    def sla_detector_health(self):
+        """
+        Task: SLA Breach Detector Health Check.
+        Verifies the SLA Breach Detector service is running and responsive.
+        """
+        self.client.get(
+            "http://127.0.0.1:30004/ping",
+            name="SLA: Ping",
+        )
+        self.client.get(
+            "http://127.0.0.1:30004/health",
+            name="SLA: Health Check",
+        )
+
+    @task(3)
+    def sla_detector_read_config(self):
+        """
+        Task: Read SLA Configuration.
+        Fetches the current SLA configuration including monitored metrics and thresholds.
+        """
+        self.client.get(
+            "http://127.0.0.1:30004/sla/config",
+            name="SLA: Get Config",
+        )
+
+    @task(3)
+    def sla_detector_breach_stats(self):
+        """
+        Task: Read Breach Statistics.
+        Fetches the current breach statistics showing which metrics have violated
+        their SLA thresholds and how many times since the service startup.
+        """
+        self.client.get(
+            "http://127.0.0.1:30004/breach/stats",
+            name="SLA: Get Breach Stats",
+        )
+
+    @task(1)
+    def sla_detector_metrics(self):
+        """
+        Task: Prometheus Metrics Endpoint.
+        Verifies the /metrics endpoint is available for Prometheus scraping.
+        """
+        self.client.get(
+            "http://127.0.0.1:30004/metrics",
+            name="SLA: Prometheus Metrics",
         )
