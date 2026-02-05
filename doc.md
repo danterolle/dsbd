@@ -1,6 +1,6 @@
 # Project Documentation
 
-                # Table of Contents
+## Table of Contents
 
 - [1. Introduction](#1-introduction)
 - [2. System Architecture](#2-system-architecture)
@@ -33,6 +33,10 @@
     - [Scenario 3: Creating a User That Already Exists (New Key)](#scenario-3-creating-a-user-that-already-exists-new-key)
     - [Scenario 4: Request Without Idempotency Key](#scenario-4-request-without-idempotency-key)
 - [8. Asynchronous Notification Flow](#8-asynchronous-notification-flow)
+- [9. Load Testing & Performance Analysis](#9-load-testing--performance-analysis)
+  - [9.1. Running a Load Test](#91-running-a-load-test)
+  - [9.2. Analyzing Results](#92-analyzing-results)
+  - [9.3. Test Report: OOM Crash & Fix](#93-test-report-oom-crash--fix)
 
 ## 1. Introduction
 
