@@ -2,11 +2,11 @@
 
 This project is a distributed system designed to manage user information, collect flight data from the OpenSky Network, provide real-time, threshold-based alerts via Telegram, monitor SLA compliance, and is deployed on Kubernetes with Prometheus monitoring.
 
-> Note: the microservice `sla_breach_detector` and all its other implementations were written exclusively by Dario Camonita as required to satisfy the requirements of the comprehensive exam.
-
 **Students:**
 - Dario Camonita
 - Matteo Jacopo Schembri
+
+> NOTE: The `sla_breach_detector` microservice and its related components were developed exclusively by Dario Camonita to fulfill the requirements of the comprehensive exam.
 
 ## Project Structure & History
 
@@ -14,8 +14,9 @@ The `main` branch contains the **final version** of the project (aligned with Ho
 - **`hw1`**: Initial microservices setup and basic communication.
 - **`hw2`**: Integration of Kafka, gRPC, and initial Kubernetes deployment.
 - **`hw3`**: Final architecture with Prometheus monitoring, Mock data generation, and full Kubernetes orchestration.
+- **`Extension`**: Implementation of the **SLA Breach Detector** microservice, which monitors GAUGE metrics via Prometheus to detect and notify SLA violations based on configurable thresholds.
 
-The assignment specifications and deliverables for each phase are available in the respective PDF files: **`hw1.pdf`**, **`hw2.pdf`**, and **`hw3.pdf`**.
+The assignment specifications and deliverables for each phase are available in the respective PDF files: **`hw1.pdf`**, **`hw2.pdf`**, **`hw3.pdf`**, and **`Estensione.pdf`**.
 
 ## Project Status
 
