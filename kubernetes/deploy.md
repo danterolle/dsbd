@@ -75,7 +75,7 @@ If installed, services are routed via an NGINX Ingress Controller on port 80:
 |:-------------------|:------------------|:---------------------------------------|
 | **User Manager**   | `/user-manager`   | `http://localhost/user-manager/ping`   |
 | **Data Collector** | `/data-collector` | `http://localhost/data-collector/ping` |
-| **SLA Detector**    | `/sla-detector`   | `http://localhost/sla-detector/ping`   |
+| **SLA Detector**   | `/sla-detector`   | `http://localhost/sla-detector/ping`   |
 
 ## 4. Automatic Database Seeding
 

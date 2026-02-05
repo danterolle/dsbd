@@ -12,7 +12,8 @@
   - [3.3. Data Collector Microservice](#33-data-collector-microservice)
   - [3.4. Alert System Service](#34-alert-system-service)
   - [3.5. Alert Notifier System Service](#35-alert-notifier-system-service)
-  - [3.6. Monitoring (Prometheus)](#36-monitoring-prometheus)
+  - [3.6. SLA Breach Detector Service](#36-sla-breach-detector-service)
+  - [3.7. Monitoring (Prometheus)](#37-monitoring-prometheus)
 - [4. Implementation Choices](#4-implementation-choices)
   - [4.1. Coding Standards](#41-coding-standards)
 - [5. Database Schema](#5-database-schema)
@@ -43,6 +44,7 @@ The architecture is composed of four main microservices, an Ingress Controller, 
 - **Data Collector**: Responsible for fetching flight data from the OpenSky Network based on user interests (including alert thresholds), storing it, and providing processed data through its API. It is also a Kafka producer.
 - **Alert System**: A Kafka consumer and producer that contains the business logic for checking if flight data crosses user-defined thresholds.
 - **Alert Notifier System**: A Kafka consumer that sends notifications to users via a Telegram Bot.
+- **SLA Breach Detector**: A monitoring service that checks PromQL metrics against configurable thresholds and detects SLA violations.
 
 The project emphasizes a clean, resilient, and scalable architecture, separation of concerns, and robust inter-service communication utilizing patterns like asynchronous messaging, Circuit Breaker, and centralized monitoring.
 
@@ -67,6 +69,7 @@ The services themselves are decoupled via an **Apache Kafka** message broker, wh
 - **Routing**: Routes requests based on URL prefixes:
   - `/user-manager/*` is routed to the `user-manager` service on port 5000.
   - `/data-collector/*` is routed to the `data-collector` service on port 5000.
+  - `/sla-detector/*` is routed to the `sla-breach-detector` service on port 5000.
 
 ### 3.2. User Manager Microservice
 
@@ -132,17 +135,37 @@ The services themselves are decoupled via an **Apache Kafka** message broker, wh
 - **Architectural Role**: A standalone service responsible for the final step of the notification pipeline: dispatching messages to the user.
 
 - **Functionality**:
-  - Acts as an asynchronous Kafka **consumer** (using `aiokafka`), listening to the `to-notifier` topic.
+  - Acts as an asynchronous Kafka **consumer** (using `aiokafka`), listening to the `to-notifier` and `sla_breach` topics.
   - Upon receiving an alert, it **connects directly to the `user-manager`'s PostgreSQL database** to retrieve the `telegram_chat_id` for the user's email.
   - It uses the Telegram Bot API to send the final alert message to the user.
 
-### 3.6. Monitoring (Prometheus)
+### 3.6. SLA Breach Detector Service
+
+- **Architectural Role**: A standalone monitoring service that acts as a metrics watchdog. It periodically samples Prometheus metrics and applies business rules to detect Service Level Agreement (SLA) violations.
+
+- **Functionality**:
+  - **Configuration Loading**: At startup, reads an SLA configuration file (`config.yaml`) containing, for each GAUGE metric: name, PromQL query, `min`, and `max` thresholds.
+  - **Periodic Sampling**: Executes a job every `T_check` seconds. The constraint `T_check >= 5 * T_scrape` is enforced to ensure stable metric readings.
+  - **Prometheus Integration**: Queries Prometheus via HTTP API (`/api/v1/query`) to obtain the current value of each configured metric.
+  - **Internal History**: Maintains a sliding window of the last 10 samples per metric.
+  - **Breach Rule**: If at least 3 samples fall below `min` **OR** at least 3 samples exceed `max`, an SLA breach event is generated.
+  - **Notification**: Acts as a Kafka **producer**, sending breach events to the `sla_breach` topic with: timestamp, metric name, query, observed value, violated threshold, breach type (low/high), and violation count.
+
+- **API Endpoints**:
+  - `GET /sla/config`: Returns the current SLA configuration.
+  - `POST /sla/config`: Dynamically updates the monitored metrics and thresholds. Validates the `T_check >= 5 * T_scrape` constraint.
+  - `GET /breach/stats`: Returns breach statistics per metric since service startup.
+  - `GET /metrics`: Prometheus metrics endpoint for self-monitoring.
+  - `GET /health`: Health check endpoint.
+  - `GET /ping`: Liveness probe endpoint.
+
+### 3.7. Monitoring (Prometheus)
 
 - **Purpose**: To collect and aggregate metrics from the microservices.
 
 - **Functionality**:
   - Prometheus is deployed as a service in the cluster.
-  - It scrapes the `/metrics` endpoints of the `user-manager` and `data-collector` services.
+  - It scrapes the `/metrics` endpoints of the `user-manager`, `data-collector`, and `sla-breach-detector` services.
   - This allows for real-time monitoring of request counts, latencies, and other custom metrics (e.g., OpenSky API call duration, flights fetched).
 - **Accessing the Dashboard**: To access the Prometheus web interface from your local machine, use the following command to forward the port:
 
@@ -387,6 +410,15 @@ The flow is divided into three main stages: data production, alert evaluation, a
 4. **Notification Dispatch**: The `alert-notifier-system` service consumes this final message from the `to-notifier` topic. It then performs a query on the `user_manager`'s database to find the `telegram_chat_id` corresponding to the user's email.
 
 5. **Message Delivery**: Finally, using the retrieved Chat ID, the service connects to the Telegram Bot API and sends the formatted alert message directly to the user, completing the workflow.
+
+### 8.1. SLA Breach Notification Flow
+
+The system also handles SLA violations via a dedicated asynchronous flow:
+
+1.  **Monitoring**: The `sla-breach-detector` queries Prometheus metrics.
+2.  **Breach Detection**: If the breach rule (e.g., 3 consecutive samples out of range) is met, it produces a message to the `sla_breach` topic.
+3.  **Consumption & Routing**: The `alert-notifier-system` consumes the message from the `sla_breach` topic.
+4.  **Admin Notification**: The system identifies the admin user (defaulting to `mario.rossi@gmail.com`) and sends a high-priority Telegram alert with the breach details (metric, observed value, threshold).
 
 ## 9. Load Testing & Performance Analysis
 
