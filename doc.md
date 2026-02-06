@@ -533,7 +533,9 @@ To manually verify the reliability of the Circuit Breaker and the fallback to mo
 
 ## 11. SLA Breach Detector Testing
 
-To intentionally trigger an SLA breach and verify the notification pipeline, follow these steps.
+To intentionally trigger an SLA breach and verify the notification pipeline, follow these steps. 
+
+**Postman Shortcut**: You can use the `sla_detector` folder in the provided Postman collection to perform all high-level operations (Get/Update Config, Breach Stats, ...) instead of using the `curl` commands listed below.
 
 ### 11.1. Prerequisites
 
