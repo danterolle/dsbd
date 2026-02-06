@@ -42,7 +42,7 @@
               "raw": "{\n    \"email\": \"mario.rossi@gmail.com\",\n    \"first_name\": \"Mario\",\n    \"last_name\": \"Rossi\",\n    \"tax_code\": \"RSSMRA85D15Z404E\",\n    \"iban\": \"IT19Z1234567890000123456789\"\n}"
             },
             "url": {
-              "raw": "http://127.0.0.1/user-manager/users",
+              "raw": "http://127.0.0.1:30000/users",
               "protocol": "http",
               "host": [
                 "127",
@@ -50,8 +50,8 @@
                 "0",
                 "1"
               ],
+              "port": "30000",
               "path": [
-                "user-manager",
                 "users"
               ]
             }
@@ -184,7 +184,7 @@
               }
             },
             "url": {
-              "raw": "http://127.0.0.1/user-manager/users/mario.rossi@gmail.com",
+              "raw": "http://127.0.0.1:30000/users/mario.rossi@gmail.com",
               "protocol": "http",
               "host": [
                 "127",
@@ -192,8 +192,8 @@
                 "0",
                 "1"
               ],
+              "port": "30000",
               "path": [
-                "user-manager",
                 "users",
                 "mario.rossi@gmail.com"
               ]
@@ -221,7 +221,7 @@
               }
             },
             "url": {
-              "raw": "http://127.0.0.1/data-collector/interests",
+              "raw": "http://127.0.0.1:30001/interests",
               "protocol": "http",
               "host": [
                 "127",
@@ -229,8 +229,8 @@
                 "0",
                 "1"
               ],
+              "port": "30001",
               "path": [
-                "data-collector",
                 "interests"
               ]
             }
@@ -439,7 +439,36 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "http://127.0.0.1/data-collector/flights/last/LICC",
+              "raw": "http://127.0.0.1:30001/flights/last/LICC",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "port": "30001",
+              "path": [
+                "flights",
+                "last",
+                "LICC"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "sla_detector",
+      "item": [
+        {
+          "name": "Ping",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/ping",
               "protocol": "http",
               "host": [
                 "127",
@@ -448,10 +477,136 @@
                 "1"
               ],
               "path": [
-                "data-collector",
-                "flights",
-                "last",
-                "LICC"
+                "sla-detector",
+                "ping"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/health",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/sla/config",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "sla",
+                "config"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Config",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"metrics\": [\n        {\n            \"name\": \"user_manager_avg_response_time\",\n            \"type\": \"gauge\",\n            \"query\": \"avg(http_request_duration_seconds{service='user_manager'})\",\n            \"min\": 0,\n            \"max\": 0.0001\n        }\n    ],\n    \"settings\": {\n        \"t_check\": 80,\n        \"prometheus_url\": \"http://prometheus:9090\",\n        \"kafka_bootstrap_servers\": \"kafka:9092\",\n        \"kafka_topic\": \"sla_breach\"\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/sla/config",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "sla",
+                "config"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Breach Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/breach/stats",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "breach",
+                "stats"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics (Prometheus)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/metrics",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "metrics"
               ]
             }
           },
