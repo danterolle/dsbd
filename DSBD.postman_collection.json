@@ -340,7 +340,7 @@
               "formdata": []
             },
             "url": {
-              "raw": "http://127.0.0.1:5002/data-collector/flights/LIMC?type=arrivals",
+              "raw": "http://127.0.0.1/data-collector/flights/LIMC?type=arrivals",
               "protocol": "http",
               "host": [
                 "127",
@@ -348,7 +348,6 @@
                 "0",
                 "1"
               ],
-              "port": "5002",
               "path": [
                 "data-collector",
                 "flights",
@@ -452,6 +451,161 @@
                 "flights",
                 "last",
                 "LICC"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "sla_detector",
+      "item": [
+        {
+          "name": "Ping",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/ping",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "ping"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/health",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/sla/config",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "sla",
+                "config"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Config",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"metrics\": [\n        {\n            \"name\": \"user_manager_avg_response_time\",\n            \"type\": \"gauge\",\n            \"query\": \"avg(http_request_duration_seconds{service='user_manager'})\",\n            \"min\": 0,\n            \"max\": 0.0001\n        }\n    ],\n    \"settings\": {\n        \"t_check\": 80,\n        \"prometheus_url\": \"http://prometheus:9090\",\n        \"kafka_bootstrap_servers\": \"kafka:9092\",\n        \"kafka_topic\": \"sla_breach\"\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/sla/config",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "sla",
+                "config"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Breach Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/breach/stats",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "breach",
+                "stats"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics (Prometheus)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://127.0.0.1/sla-detector/metrics",
+              "protocol": "http",
+              "host": [
+                "127",
+                "0",
+                "0",
+                "1"
+              ],
+              "path": [
+                "sla-detector",
+                "metrics"
               ]
             }
           },
