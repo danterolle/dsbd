@@ -1,6 +1,6 @@
 # Project Documentation
 
-                # Table of Contents
+## Table of Contents
 
 - [1. Introduction](#1-introduction)
 - [2. System Architecture](#2-system-architecture)
@@ -12,7 +12,8 @@
   - [3.3. Data Collector Microservice](#33-data-collector-microservice)
   - [3.4. Alert System Service](#34-alert-system-service)
   - [3.5. Alert Notifier System Service](#35-alert-notifier-system-service)
-  - [3.6. Monitoring (Prometheus)](#36-monitoring-prometheus)
+  - [3.6. SLA Breach Detector Service](#36-sla-breach-detector-service)
+  - [3.7. Monitoring (Prometheus)](#37-monitoring-prometheus)
 - [4. Implementation Choices](#4-implementation-choices)
   - [4.1. Coding Standards](#41-coding-standards)
 - [5. Database Schema](#5-database-schema)
@@ -32,6 +33,16 @@
     - [Scenario 3: Creating a User That Already Exists (New Key)](#scenario-3-creating-a-user-that-already-exists-new-key)
     - [Scenario 4: Request Without Idempotency Key](#scenario-4-request-without-idempotency-key)
 - [8. Asynchronous Notification Flow](#8-asynchronous-notification-flow)
+- [9. Load Testing & Performance Analysis](#9-load-testing--performance-analysis)
+  - [9.1. Running a Load Test](#91-running-a-load-test)
+  - [9.2. Analyzing Results](#92-analyzing-results)
+  - [9.3. Test Report: OOM Crash & Fix](#93-test-report-oom-crash--fix)
+- [10. Circuit Breaker Testing](#10-circuit-breaker-testing)
+- [11. SLA Breach Detector Testing](#11-sla-breach-detector-testing)
+  - [11.1. Prerequisites](#111-prerequisites)
+  - [11.2. Method 1: Using Synthetic Metrics (Recommended)](#112-method-1-using-synthetic-metrics-recommended)
+  - [11.3. Method 2: Traffic Stress Test](#113-method-2-traffic-stress-test)
+  - [11.4. Verifying Notifications](#114-verifying-notifications)
 
 ## 1. Introduction
 
@@ -43,6 +54,7 @@ The architecture is composed of four main microservices, an Ingress Controller, 
 - **Data Collector**: Responsible for fetching flight data from the OpenSky Network based on user interests (including alert thresholds), storing it, and providing processed data through its API. It is also a Kafka producer.
 - **Alert System**: A Kafka consumer and producer that contains the business logic for checking if flight data crosses user-defined thresholds.
 - **Alert Notifier System**: A Kafka consumer that sends notifications to users via a Telegram Bot.
+- **SLA Breach Detector**: A monitoring service that checks PromQL metrics against configurable thresholds and detects SLA violations.
 
 The project emphasizes a clean, resilient, and scalable architecture, separation of concerns, and robust inter-service communication utilizing patterns like asynchronous messaging, Circuit Breaker, and centralized monitoring.
 
@@ -67,6 +79,7 @@ The services themselves are decoupled via an **Apache Kafka** message broker, wh
 - **Routing**: Routes requests based on URL prefixes:
   - `/user-manager/*` is routed to the `user-manager` service on port 5000.
   - `/data-collector/*` is routed to the `data-collector` service on port 5000.
+  - `/sla-detector/*` is routed to the `sla-breach-detector` service on port 5000.
 
 ### 3.2. User Manager Microservice
 
@@ -132,17 +145,37 @@ The services themselves are decoupled via an **Apache Kafka** message broker, wh
 - **Architectural Role**: A standalone service responsible for the final step of the notification pipeline: dispatching messages to the user.
 
 - **Functionality**:
-  - Acts as an asynchronous Kafka **consumer** (using `aiokafka`), listening to the `to-notifier` topic.
+  - Acts as an asynchronous Kafka **consumer** (using `aiokafka`), listening to the `to-notifier` and `sla_breach` topics.
   - Upon receiving an alert, it **connects directly to the `user-manager`'s PostgreSQL database** to retrieve the `telegram_chat_id` for the user's email.
   - It uses the Telegram Bot API to send the final alert message to the user.
 
-### 3.6. Monitoring (Prometheus)
+### 3.6. SLA Breach Detector Service
+
+- **Architectural Role**: A standalone monitoring service that acts as a metrics watchdog. It periodically samples Prometheus metrics and applies business rules to detect Service Level Agreement (SLA) violations.
+
+- **Functionality**:
+  - **Configuration Loading**: At startup, reads an SLA configuration file (`config.yaml`) containing, for each GAUGE metric: name, PromQL query, `min`, and `max` thresholds.
+  - **Periodic Sampling**: Executes a job every `T_check` seconds. The constraint `T_check >= 5 * T_scrape` is enforced to ensure stable metric readings.
+  - **Prometheus Integration**: Queries Prometheus via HTTP API (`/api/v1/query`) to obtain the current value of each configured metric.
+  - **Internal History**: Maintains a sliding window of the last 10 samples per metric.
+  - **Breach Rule**: If at least 3 samples fall below `min` **OR** at least 3 samples exceed `max`, an SLA breach event is generated.
+  - **Notification**: Acts as a Kafka **producer**, sending breach events to the `sla_breach` topic with: timestamp, metric name, query, observed value, violated threshold, breach type (low/high), and violation count.
+
+- **API Endpoints**:
+  - `GET /sla/config`: Returns the current SLA configuration.
+  - `POST /sla/config`: Dynamically updates the monitored metrics and thresholds. Validates the `T_check >= 5 * T_scrape` constraint.
+  - `GET /breach/stats`: Returns breach statistics per metric since service startup.
+  - `GET /metrics`: Prometheus metrics endpoint for self-monitoring.
+  - `GET /health`: Health check endpoint.
+  - `GET /ping`: Liveness probe endpoint.
+
+### 3.7. Monitoring (Prometheus)
 
 - **Purpose**: To collect and aggregate metrics from the microservices.
 
 - **Functionality**:
   - Prometheus is deployed as a service in the cluster.
-  - It scrapes the `/metrics` endpoints of the `user-manager` and `data-collector` services.
+  - It scrapes the `/metrics` endpoints of the `user-manager`, `data-collector`, and `sla-breach-detector` services.
   - This allows for real-time monitoring of request counts, latencies, and other custom metrics (e.g., OpenSky API call duration, flights fetched).
 - **Accessing the Dashboard**: To access the Prometheus web interface from your local machine, use the following command to forward the port:
 
@@ -388,6 +421,15 @@ The flow is divided into three main stages: data production, alert evaluation, a
 
 5. **Message Delivery**: Finally, using the retrieved Chat ID, the service connects to the Telegram Bot API and sends the formatted alert message directly to the user, completing the workflow.
 
+### 8.1. SLA Breach Notification Flow
+
+The system also handles SLA violations via a dedicated asynchronous flow:
+
+1.  **Monitoring**: The `sla-breach-detector` queries Prometheus metrics.
+2.  **Breach Detection**: If the breach rule (e.g., 3 consecutive samples out of range) is met, it produces a message to the `sla_breach` topic.
+3.  **Consumption & Routing**: The `alert-notifier-system` consumes the message from the `sla_breach` topic.
+4.  **Admin Notification**: The system identifies the admin user (defaulting to `mario.rossi@gmail.com`) and sends a high-priority Telegram alert with the breach details (metric, observed value, threshold).
+
 ## 9. Load Testing & Performance Analysis
 
 To validate the system's resilience and scalability, we integrated **Locust**, a Python-based load testing tool.
@@ -446,3 +488,148 @@ During the initial load test (100 users, 10 spawn rate), we observed a critical 
 - **Root Cause Analysis**: Kubernetes logs revealed an **OOMKilled** (Out Of Memory) error with exit code **137**. The container had exceeded its hard limit of **256Mi**.
 - **Resolution**: We increased the memory limit to **512Mi** in the `data-collector-deployment.yaml` manifest.
 - **Verification**: A subsequent test ran successfully with **zero failures** over 1600+ requests. We observed that the `data-collector` exhibits higher latency (~1.5s) compared to the lightweight `user-manager` (~20ms), which is consistent with the heavier computational load of processing flight data.
+
+## 10. Circuit Breaker Testing
+
+To manually verify the reliability of the Circuit Breaker and the fallback to mock data, follow this procedure:
+
+1.  **Modify the Code (Sabotage)**:
+    Open `microservices/data_collector/app/services.py`, locate the `call_opensky` function, and inject an exception to simulate a network failure:
+
+    ```
+    @breaker
+    def call_opensky(api_url: str, params: Optional[dict] = None) -> Optional[dict]:
+        # --- TEST MODIFICATION START ---
+        # Simulate a network error to trigger the circuit breaker
+        raise requests.exceptions.ConnectTimeout("Test: Simulated Connection Failure!")
+        # --- TEST MODIFICATION END ---
+        
+        token = get_opensky_token()
+        # ...
+    ```
+
+    *Optional*: To speed up the test, reduce the sleep time in `data_collection_job` from `300` to `10` seconds.
+
+2.  **Deploy Changes**:
+    Apply the changes to the cluster:
+
+    ```
+    ./kubernetes/deploy.sh up
+    ```
+
+3.  **Observe Logs**:
+    Monitor the `data-collector` logs:
+
+    ```
+    kubectl logs -f -l app=data-collector
+    ```
+
+    - **Phase 1**: You will see five consecutive errors (`Error calling OpenSky API...`).
+    - **Phase 2**: You will see the circuit breaker opening (`CircuitBreakerError: Failures threshold reached, circuit open`).
+    - **Confirmation**: The logs will confirm that mock data is being used: `Found X flights for Y (Source: Mock)`.
+
+4.  **Restore**:
+    Remove the injected exception and run `./kubernetes/deploy.sh up` again to restore normal operation.
+
+## 11. SLA Breach Detector Testing
+
+To intentionally trigger an SLA breach and verify the notification pipeline, follow these steps.
+
+### 11.1. Prerequisites
+
+Ensure the `sla-breach-detector` service is running and accessible (default port 30004).
+
+### 11.2. Method 1: Using Synthetic Metrics (Recommended)
+
+The most reliable way to test the logic is to use a PromQL query that returns a constant value, bypassing the need for actual traffic load.
+
+1.  **Inject Faulty Configuration**:
+    Send a `POST` request to configure a metric that always returns `0.5` (using `vector(0.5)`), while setting the minimum required threshold to `1.0`. This simulates a persistent "under-performance" or "low value" violation.
+
+    **Request**:
+    ```
+    curl -X POST http://localhost:30004/sla/config \
+      -H "Content-Type: application/json" \
+      -d '{
+        "metrics": [
+          {
+            "name": "test_synthetic_metric",
+            "type": "gauge",
+            "query": "vector(0.5)",
+            "min": 1.0,
+            "max": 5.0
+          }
+        ],
+        "settings": {
+          "t_check": 80,
+          "prometheus_url": "http://prometheus:9090",
+          "kafka_bootstrap_servers": "kafka:9092",
+          "kafka_topic": "sla_breach"
+        }
+      }'
+    ```
+
+    *Note: `t_check` is set to 80s to satisfy the safety constraint (`t_check >= 5 * scrape_interval`).*
+
+2.  **Wait for Detection**:
+    The system requires **3 consecutive samples** to confirm a breach.
+    -   T+0s: Config applied.
+    -   T+80s: First sample (0.5 < 1.0).
+    -   T+160s: Second sample (0.5 < 1.0).
+    -   T+240s: Third sample -> **BREACH DETECTED**.
+
+3.  **Verify**:
+    After ~4 minutes, check the breach statistics:
+
+    ```
+    curl http://localhost:30004/breach/stats
+    ```
+
+    **Expected Output**:
+    ```json
+    {
+      "test_synthetic_metric": {
+        "min": 1,
+        "max": 0
+      }
+    }
+    ```
+
+### 11.3. Method 2: Traffic Stress Test
+
+Alternatively, you can stress the system with Locust and lower the maximum threshold.
+
+1.  **Configure SLA**:
+    Set `max` threshold for `user_manager_avg_response_time` to an extremely low value (e.g., `0.0001s`).
+
+    ```
+    curl -X POST http://localhost:30004/sla/config \
+      -H "Content-Type: application/json" \
+      -d '{
+        "metrics": [{
+          "name": "user_manager_response",
+          "type": "gauge",
+          "query": "avg(http_request_duration_seconds{service=\"user_manager\"})",
+          "min": 0,
+          "max": 0.0001
+        }],
+        "settings": {"t_check": 80}
+      }'
+    ```
+
+2.  **Generate Traffic**:
+    Run Locust to generate requests, ensuring the metric has a value (> 0).
+    ```
+    locust --headless -u 10 -r 2 --run-time 5m --host http://localhost:30000
+    ```
+
+3.  **Verify**:
+    Check `http://localhost:30004/breach/stats`. You should see increments in the `max` counter.
+
+### 11.4. Verifying Notifications
+
+If you have configured the Admin email, you will receive a Telegram message. Otherwise, check the Kafka logs to confirm the event was published:
+
+```
+kubectl logs -l app=sla-breach-detector | grep "Notification sent"
+```
