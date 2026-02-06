@@ -11,7 +11,7 @@ from config import (
     KAFKA_BROKER_URL,
     CONSUMER_TOPIC,
     TELEGRAM_BOT_TOKEN,
-    DATABASE_URL,
+    DATABASE_URL, SLA_BREACH_TOPIC,
 )
 from metrics import track_requests, metrics_endpoint, track_notification_sent
 
@@ -76,6 +76,7 @@ async def main():
 
     consumer = AIOKafkaConsumer(
         CONSUMER_TOPIC,
+        SLA_BREACH_TOPIC,
         bootstrap_servers=KAFKA_BROKER_URL,
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
         group_id="alert_notifier_group",
@@ -97,13 +98,16 @@ async def main():
         try:
             await consumer._client.force_metadata_update()
             partitions = consumer.partitions_for_topic(CONSUMER_TOPIC)
-            if partitions is not None and len(partitions) > 0:
+            sla_partitions = consumer.partitions_for_topic(SLA_BREACH_TOPIC)
+            if (partitions is not None and len(partitions) > 0) and \
+               (sla_partitions is not None and len(sla_partitions) > 0):
                 print(f"Topic '{CONSUMER_TOPIC}' found with partitions: {partitions}")
+                print(f"Topic '{SLA_BREACH_TOPIC}' found with partitions: {sla_partitions}")
                 break
         except Exception as e:
             print(f"Error checking topic: {e}")
 
-        print(f"Topic '{CONSUMER_TOPIC}' not found yet. Waiting...")
+        print(f"Topics '{CONSUMER_TOPIC}' and '{SLA_BREACH_TOPIC}' not found yet. Waiting...")
         await asyncio.sleep(2)
 
     print("Starting message consumption...")
@@ -111,9 +115,31 @@ async def main():
         async for message in consumer:
             try:
                 data = message.value
-                print(f"Received notification: {data}")
+                topic = message.topic
+                print(f"Received message from {topic}: {data}")
 
-                user_email = data.get("user_email")
+                if topic == SLA_BREACH_TOPIC:
+                    # SLA Breach notification is broadcast to a default admin/support email or specific users
+                    # For this project, we'll send it to the 'seed user' or a generic admin if available.
+                    # As a default, we'll try to find any registered user to notify them of the system status.
+                    user_email = "mario.rossi@gmail.com" # Default admin for SLA notifications
+                    text_message = (
+                        f"🚨 *SLA BREACH DETECTED* 🚨\n\n"
+                        f"Metric: *{data.get('metric')}*\n"
+                        f"Type: *{data.get('breach_type').upper()}*\n\n"
+                        f"Observed: `{data.get('observed_value')}`\n"
+                        f"Threshold: `{data.get('threshold_violated')}`\n"
+                        f"Violations: {data.get('violations_count')}\n\n"
+                        f"Timestamp: _{data.get('timestamp')}_"
+                    )
+                else:
+                    user_email = data.get("user_email")
+                    text_message = (
+                        f"🔔 *Flight Alert* 🔔\n\n"
+                        f"Airport: *{data.get('airport_code')}*\n\n"
+                        f"Details: {data.get('condition')}"
+                    )
+
                 if not user_email:
                     continue
 
@@ -127,17 +153,12 @@ async def main():
                     if user and user.telegram_chat_id:
                         if bot:
                             try:
-                                text_message = (
-                                    f"🔔 *Flight Alert* 🔔\n\n"
-                                    f"Airport: *{data.get('airport_code')}*\n\n"
-                                    f"Details: {data.get('condition')}"
-                                )
                                 await bot.send_message(
                                     chat_id=user.telegram_chat_id,
                                     text=text_message,
                                     parse_mode=telegram.constants.ParseMode.MARKDOWN,
                                 )
-                                print(f"Sent Telegram notification to {user_email}")
+                                print(f"Sent Telegram notification to {user_email} for topic {topic}")
                                 track_notification_sent(True)
                             except Exception as e:
                                 print(

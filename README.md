@@ -1,10 +1,12 @@
 # Distributed Systems and Big Data (DSBD) Project
 
-This project is a distributed system designed to manage user information, collect flight data from the OpenSky Network, provide real-time, threshold-based alerts via Telegram, and is deployed on Kubernetes with Prometheus monitoring.
+This project is a distributed system designed to manage user information, collect flight data from the OpenSky Network, provide real-time, threshold-based alerts via Telegram, monitor SLA compliance, and is deployed on Kubernetes with Prometheus monitoring.
 
 **Students:**
 - Dario Camonita
 - Matteo Jacopo Schembri
+
+> NOTE: The `sla_breach_detector` microservice and its related components were developed exclusively by Dario Camonita to fulfill the requirements of the comprehensive exam.
 
 ## Project Structure & History
 
@@ -12,8 +14,9 @@ The `main` branch contains the **final version** of the project (aligned with Ho
 - **`hw1`**: Initial microservices setup and basic communication.
 - **`hw2`**: Integration of Kafka, gRPC, and initial Kubernetes deployment.
 - **`hw3`**: Final architecture with Prometheus monitoring, Mock data generation, and full Kubernetes orchestration.
+- **`Extension`**: Implementation of the **SLA Breach Detector** microservice, which monitors GAUGE metrics via Prometheus to detect and notify SLA violations based on configurable thresholds.
 
-The assignment specifications and deliverables for each phase are available in the respective PDF files: **`hw1.pdf`**, **`hw2.pdf`**, and **`hw3.pdf`**.
+The assignment specifications and deliverables for each phase are available in the respective PDF files: **`hw1.pdf`**, **`hw2.pdf`**, **`hw3.pdf`**, and **`Estensione.pdf`**.
 
 ## Project Status
 
@@ -23,7 +26,7 @@ This project implements a comprehensive microservices architecture with advanced
 
 ![Architectural Diagram](img/hw2_architecture.png)
 
-The system's architecture is built around several decoupled microservices orchestrated on Kubernetes. An **NGINX API Gateway** provides a single, secure entry point, routing requests to the appropriate services. Asynchronous communication is handled by **Apache Kafka**, which connects data producers (like the `data-collector`) to consumers (like the `alert-system` and `alert-notifier-system`). The `data-collector` integrates a **Circuit Breaker** for resilience against external API failures. The entire system is monitored using **Prometheus**, collecting custom metrics from the microservices.
+The system's architecture is built around several decoupled microservices orchestrated on Kubernetes. An **NGINX API Gateway** provides a single, secure entry point, routing requests to the appropriate services. Asynchronous communication is handled by **Apache Kafka**, which connects data producers (like the `data-collector`) to consumers (like the `alert-system` and `alert-notifier-system`). The `data-collector` integrates a **Circuit Breaker** for resilience against external API failures. The entire system is monitored using **Prometheus**, collecting custom metrics from the microservices. *Additionally*, the `sla-breach-detector` leverages this data to actively enforce compliance, by querying Prometheus for violations and publishing breach events back to the Kafka messaging backbone.
 
 ## Documentation
 
@@ -49,6 +52,7 @@ The Python code in this project adheres to the **PEP 8** style guide. All docstr
     The system uses **NodePorts** by default, making services accessible at:
     *   **User Manager**: `http://localhost:30000`
     *   **Data Collector**: `http://localhost:30001`
+    *   **SLA Breach Detector**: `http://localhost:30004`
     *   **Prometheus**: `http://localhost:30090`
 
     For a full End-to-End test guide (including triggering Telegram alerts), please refer to the **[Deployment Guide](kubernetes/deploy.md)**.

@@ -1,0 +1,6 @@
+flask
+requests
+kafka-python
+apscheduler
+pyyaml
+prometheus_client
