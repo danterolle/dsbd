@@ -42,7 +42,7 @@
               "raw": "{\n    \"email\": \"mario.rossi@gmail.com\",\n    \"first_name\": \"Mario\",\n    \"last_name\": \"Rossi\",\n    \"tax_code\": \"RSSMRA85D15Z404E\",\n    \"iban\": \"IT19Z1234567890000123456789\"\n}"
             },
             "url": {
-              "raw": "http://127.0.0.1:30000/users",
+              "raw": "http://127.0.0.1/user-manager/users",
               "protocol": "http",
               "host": [
                 "127",
@@ -50,8 +50,8 @@
                 "0",
                 "1"
               ],
-              "port": "30000",
               "path": [
+                "user-manager",
                 "users"
               ]
             }
@@ -184,7 +184,7 @@
               }
             },
             "url": {
-              "raw": "http://127.0.0.1:30000/users/mario.rossi@gmail.com",
+              "raw": "http://127.0.0.1/user-manager/users/mario.rossi@gmail.com",
               "protocol": "http",
               "host": [
                 "127",
@@ -192,8 +192,8 @@
                 "0",
                 "1"
               ],
-              "port": "30000",
               "path": [
+                "user-manager",
                 "users",
                 "mario.rossi@gmail.com"
               ]
@@ -221,7 +221,7 @@
               }
             },
             "url": {
-              "raw": "http://127.0.0.1:30001/interests",
+              "raw": "http://127.0.0.1/data-collector/interests",
               "protocol": "http",
               "host": [
                 "127",
@@ -229,8 +229,8 @@
                 "0",
                 "1"
               ],
-              "port": "30001",
               "path": [
+                "data-collector",
                 "interests"
               ]
             }
@@ -340,7 +340,7 @@
               "formdata": []
             },
             "url": {
-              "raw": "http://127.0.0.1:5002/data-collector/flights/LIMC?type=arrivals",
+              "raw": "http://127.0.0.1/data-collector/flights/LIMC?type=arrivals",
               "protocol": "http",
               "host": [
                 "127",
@@ -348,7 +348,6 @@
                 "0",
                 "1"
               ],
-              "port": "5002",
               "path": [
                 "data-collector",
                 "flights",
@@ -439,7 +438,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "http://127.0.0.1:30001/flights/last/LICC",
+              "raw": "http://127.0.0.1/data-collector/flights/last/LICC",
               "protocol": "http",
               "host": [
                 "127",
@@ -447,8 +446,8 @@
                 "0",
                 "1"
               ],
-              "port": "30001",
               "path": [
+                "data-collector",
                 "flights",
                 "last",
                 "LICC"
